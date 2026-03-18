@@ -104,3 +104,15 @@ setInterval(() => {
   status.style.color = online ? "#22c55e" : "#ef4444";
 
 }, 5000);
+
+function addLog(message) {
+  const p = document.createElement("p");
+  p.textContent = new Date().toLocaleTimeString() + " - " + message;
+
+  log.prepend(p);
+
+  // mantém só 10 logs
+  if (log.children.length > 10) {
+    log.removeChild(log.lastChild);
+  }
+}
