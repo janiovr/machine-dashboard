@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Machine Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="header">
+  <h1>Machine Dashboard</h1>
+  <span class="status online">● Connected</span>
+</header>
+
+<main class="grid">
+
+  <!-- DRO -->
+  <div class="card dro">
+    <h2>Coordinates</h2>
+    <p>X: <span id="x">0.00</span></p>
+    <p>Y: <span id="y">0.00</span></p>
+    <p>Z: <span id="z">0.00</span></p>
+  </div>
+
+  <!-- Spindle -->
+  <div class="card spindle">
+    <h2>Spindle</h2>
+    <p id="rpm">0 RPM</p>
+    <input type="range" id="rpmControl" min="0" max="24000">
+    <p id="rpmValue">12000 RPM</p>
+    <button id="spindleToggle">ON / OFF</button>
+  </div>
+
+  <!-- Feed -->
+  <div class="card feed">
+    <h2>Feed Rate</h2>
+    <input type="range" id="feed" min="0" max="200">
+    <p id="feedValue">100%</p>
+  </div>
+
+  <!-- Status -->
+  <div class="card status">
+    <h2>System Status</h2>
+    <p><span class="dot green"></span> Endstops</p>
+    <p><span class="dot yellow"></span> Drivers Temp</p>
+    <p><span class="dot green"></span> Connection</p>
+  </div>
+
+  <!-- Jog -->
+  <div class="card jog">
+    <h2>Jog Control</h2>
+    <div class="jog-controls">
+      <button>↑</button>
+      <div>
+        <button>←</button>
+        <button>↓</button>
+        <button>→</button>
+      </div>
+      <button>Z+</button>
+      <button>Z-</button>
+    </div>
+  </div>
+
+  <!-- G-code -->
+  <div class="card gcode">
+    <h2>G-Code</h2>
+    <pre id="gcodeBox">
+G01 X10 Y10
+G01 X20 Y20
+G01 X30 Y10
+    </pre>
+  </div>
+
+  <!-- Logs -->
+  <div class="card logs">
+    <h2>Logs</h2>
+    <div id="log"></div>
+  </div>
+
+</main>
+
+<!-- Controles -->
+<section class="controls">
+  <button id="start">Start</button>
+  <button id="stop">Stop</button>
+</section>
+
+<!-- Emergency -->
+<section class="estop">
+  <button id="estop">EMERGENCY STOP</button>
+</section>
+
+<script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 40px;
+}
+
+.status.online {
+  color: #22c55e;
+}
+
+/* GRID */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 20px 40px;
+}
+
+/* CARDS */
+.card {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255,255,255,0.05);
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.card h2 {
+  font-size: 14px;
+  margin-bottom: 10px;
+  opacity: 0.8;
+}
+
+/* DRO */
+.dro p {
+  font-size: 18px;
+  margin: 4px 0;
+}
+
+/* GRID POSITIONS */
+.jog { grid-column: span 2; }
+.gcode { grid-column: span 1; }
+.logs { grid-column: span 1; }
+
+/* BOTÕES */
+button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+
+#start {
+  background: #22c55e;
+  color: black;
+}
+
+#stop {
+  background: #ef4444;
+  color: white;
+}
+
+/* E-STOP */
+.estop {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.estop button {
+  width: 300px;
+  padding: 10px;
+  background: #dc2626;
+  color: white;
+  font-weight: bold;
+}
+
+/* JOG */
+.jog-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+/* GCODE */
+#gcodeBox {
+  background: #020617;
+  padding: 10px;
+  height: 80px;
+  overflow-y: scroll;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+/* STATUS DOTS */
+.dot {
+  height: 8px;
+  width: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 5px;
+}
+
+.green { background: #22c55e; }
+.yellow { background: #facc15; }
+.red { background: #ef4444; }
+
+/* CONTROLES */
+.controls {
+  display: flex;
+  gap: 10px;
+  padding-left: 40px;
+}
