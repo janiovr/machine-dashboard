@@ -120,3 +120,24 @@ button {
   gap: 10px;
   padding-left: 40px;
 }
+
+* {
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255,255,255,0.15);
+}
+
+button:hover {
+  opacity: 0.8;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+.card {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
