@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CNC Dashboard</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=9" />
 </head>
 <body>
   <div class="dashboard">
@@ -103,6 +103,36 @@
         </div>
       </section>
 
+      <!-- Limits -->
+      <section class="panel limits-panel">
+        <div class="panel-header">
+          <h2>Machine Limits</h2>
+          <button class="mini-btn" onclick="applyWorkspaceLimits()">Apply</button>
+        </div>
+
+        <div class="limits-grid">
+          <div class="field">
+            <label for="xLimit">X Max</label>
+            <input id="xLimit" type="number" value="300" min="1" step="1" />
+          </div>
+
+          <div class="field">
+            <label for="yLimit">Y Max</label>
+            <input id="yLimit" type="number" value="200" min="1" step="1" />
+          </div>
+
+          <div class="field">
+            <label for="zLimit">Z Depth</label>
+            <input id="zLimit" type="number" value="50" min="1" step="1" />
+          </div>
+        </div>
+
+        <div class="viewer-info">
+          <p>X/Y workspace starts at the lower-left origin.</p>
+          <p>Z can move from 0 down to negative depth.</p>
+        </div>
+      </section>
+
       <!-- Viewer -->
       <section class="panel viewer-panel">
         <div class="panel-header">
@@ -111,12 +141,13 @@
         </div>
 
         <div class="viewer-wrapper">
-          <canvas id="machineCanvas" width="500" height="320"></canvas>
+          <canvas id="machineCanvas" width="900" height="420"></canvas>
         </div>
 
         <div class="viewer-info">
-          <p>Blue point = current machine position.</p>
-          <p>Gray line = loaded G-code path. Orange line = executed path.</p>
+          <p>Origin = lower-left corner of the workspace.</p>
+          <p>Gray dashed = G0 rapid move. Gray solid = G1 cutting path.</p>
+          <p>Green dashed = executed G0. Orange = executed G1.</p>
         </div>
       </section>
 
@@ -132,13 +163,7 @@
           </div>
         </div>
 
-        <textarea id="gcodeInput" class="gcode-input" spellcheck="false">
-G0 X0 Y0
-G1 X20 Y0
-G1 X20 Y20
-G1 X0 Y20
-G1 X0 Y0
-        </textarea>
+        <textarea id="gcodeInput" class="gcode-input" spellcheck="false"></textarea>
       </section>
 
       <!-- Feed -->
@@ -187,7 +212,6 @@ G1 X0 Y0
     </main>
   </div>
 
-  <!-- Help Modal -->
   <div id="helpModal" class="help-modal hidden">
     <div class="help-content">
       <div class="panel-header">
