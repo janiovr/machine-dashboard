@@ -1,95 +1,210 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Machine Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNC Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
-<header class="header">
-  <h1>Machine Dashboard</h1>
-  <span class="status online">● Connected</span>
-</header>
-
-<main class="grid">
-
-  <!-- DRO -->
-  <div class="card dro">
-    <h2>Coordinates</h2>
-    <p>X: <span id="x">0.00</span></p>
-    <p>Y: <span id="y">0.00</span></p>
-    <p>Z: <span id="z">0.00</span></p>
-  </div>
-
-  <!-- Spindle -->
-  <div class="card spindle">
-    <h2>Spindle</h2>
-    <p id="rpm">0 RPM</p>
-    <input type="range" id="rpmControl" min="0" max="24000">
-    <p id="rpmValue">12000 RPM</p>
-    <button id="spindleToggle">ON / OFF</button>
-  </div>
-
-  <!-- Feed -->
-  <div class="card feed">
-    <h2>Feed Rate</h2>
-    <input type="range" id="feed" min="0" max="200">
-    <p id="feedValue">100%</p>
-  </div>
-
-  <!-- Status -->
-  <div class="card status">
-    <h2>System Status</h2>
-    <p><span class="dot green"></span> Endstops</p>
-    <p><span class="dot yellow"></span> Drivers Temp</p>
-    <p><span class="dot green"></span> Connection</p>
-  </div>
-
-  <!-- Jog -->
-  <div class="card jog">
-    <h2>Jog Control</h2>
-    <div class="jog-controls">
-      <button>↑</button>
+  <div class="dashboard">
+    <header class="topbar">
       <div>
-        <button>←</button>
-        <button>↓</button>
-        <button>→</button>
+        <h1>CNC Dashboard</h1>
+        <p class="subtitle">Machine Control Interface</p>
       </div>
-      <button>Z+</button>
-      <button>Z-</button>
+
+      <div class="topbar-actions">
+        <div id="machineStatus" class="status disconnected">● Disconnected</div>
+        <button class="btn success" onclick="connectMachine()">Connect</button>
+        <button class="btn danger" onclick="disconnectMachine()">Disconnect</button>
+        <button class="btn" onclick="toggleHelp()">Help</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <!-- Coordinates -->
+      <section class="panel dro-panel">
+        <div class="panel-header">
+          <h2>Coordinates</h2>
+          <span class="unit-badge" id="unitDisplay">mm</span>
+        </div>
+
+        <div class="dro-values">
+          <div class="axis-card">
+            <span class="axis-label">X</span>
+            <span class="axis-value" id="x">0.00</span>
+            <button class="mini-btn danger" onclick="zeroAxis('X')">Zero X</button>
+          </div>
+
+          <div class="axis-card">
+            <span class="axis-label">Y</span>
+            <span class="axis-value" id="y">0.00</span>
+            <button class="mini-btn danger" onclick="zeroAxis('Y')">Zero Y</button>
+          </div>
+
+          <div class="axis-card">
+            <span class="axis-label">Z</span>
+            <span class="axis-value" id="z">0.00</span>
+            <button class="mini-btn danger" onclick="zeroAxis('Z')">Zero Z</button>
+          </div>
+        </div>
+
+        <div class="dro-actions">
+          <button class="btn warning" onclick="zeroAllAxes()">Zero All</button>
+          <button class="btn" onclick="homeAxes()">Home</button>
+        </div>
+      </section>
+
+      <!-- Jog -->
+      <section class="panel jog-panel">
+        <div class="panel-header">
+          <h2>Jog Control</h2>
+        </div>
+
+        <div class="controls-row">
+          <div class="field">
+            <label for="unitSelect">Unit</label>
+            <select id="unitSelect">
+              <option value="mm" selected>mm</option>
+              <option value="inch">inch</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="jogStep">Step</label>
+            <select id="jogStep">
+              <option value="0.1">0.1</option>
+              <option value="1" selected>1</option>
+              <option value="10">10</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="jog-layout">
+          <div class="jog-cross">
+            <div></div>
+            <button class="jog-btn" onclick="jog('Y', 1)">↑</button>
+            <div></div>
+
+            <button class="jog-btn" onclick="jog('X', -1)">←</button>
+            <button class="jog-btn center-btn" onclick="zeroAllAxes()">●</button>
+            <button class="jog-btn" onclick="jog('X', 1)">→</button>
+
+            <div></div>
+            <button class="jog-btn" onclick="jog('Y', -1)">↓</button>
+            <div></div>
+          </div>
+
+          <div class="jog-z">
+            <button class="jog-btn" onclick="jog('Z', 1)">Z+</button>
+            <button class="jog-btn" onclick="jog('Z', -1)">Z-</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Viewer -->
+      <section class="panel viewer-panel">
+        <div class="panel-header">
+          <h2>Machine View</h2>
+          <span class="panel-note">2D position / toolpath</span>
+        </div>
+
+        <div class="viewer-wrapper">
+          <canvas id="machineCanvas" width="500" height="320"></canvas>
+        </div>
+
+        <div class="viewer-info">
+          <p>Blue point = current machine position.</p>
+          <p>Gray line = loaded G-code path. Orange line = executed path.</p>
+        </div>
+      </section>
+
+      <!-- G-code -->
+      <section class="panel gcode-panel">
+        <div class="panel-header">
+          <h2>G-code</h2>
+          <div class="gcode-actions">
+            <button class="mini-btn" onclick="loadGcode()">Load</button>
+            <button class="mini-btn success" onclick="runSimulation()">Run</button>
+            <button class="mini-btn warning" onclick="resetSimulation()">Reset</button>
+            <button class="mini-btn danger" onclick="clearGcode()">Clear</button>
+          </div>
+        </div>
+
+        <textarea id="gcodeInput" class="gcode-input" spellcheck="false">
+G0 X0 Y0
+G1 X20 Y0
+G1 X20 Y20
+G1 X0 Y20
+G1 X0 Y0
+        </textarea>
+      </section>
+
+      <!-- Feed -->
+      <section class="panel feed-panel">
+        <div class="panel-header">
+          <h2>Feed Rate</h2>
+        </div>
+
+        <div class="feed-box">
+          <input type="range" id="feed" min="0" max="200" value="100" />
+          <div class="feed-readout">
+            <span>Current Feed</span>
+            <strong id="feedValue">100%</strong>
+          </div>
+        </div>
+      </section>
+
+      <!-- Spindle -->
+      <section class="panel spindle-panel">
+        <div class="panel-header">
+          <h2>Spindle</h2>
+        </div>
+
+        <div class="spindle-box">
+          <div class="rpm-display">
+            <span class="rpm-label">RPM</span>
+            <span id="rpm">0</span>
+          </div>
+
+          <div class="spindle-actions">
+            <button class="btn success" onclick="startSpindle()">Start</button>
+            <button class="btn danger" onclick="stopSpindle()">Stop</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Log -->
+      <section class="panel log-panel">
+        <div class="panel-header">
+          <h2>System Log</h2>
+          <button class="mini-btn" onclick="clearLog()">Clear</button>
+        </div>
+
+        <div id="log" class="log-box"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Help Modal -->
+  <div id="helpModal" class="help-modal hidden">
+    <div class="help-content">
+      <div class="panel-header">
+        <h2>Instructions</h2>
+        <button class="mini-btn danger" onclick="toggleHelp()">Close</button>
+      </div>
+
+      <div class="help-text">
+        <p><strong>Connect:</strong> connect the machine before jogging or running simulation.</p>
+        <p><strong>Jog:</strong> use arrows for X/Y and Z+/Z- for vertical movement.</p>
+        <p><strong>Zero:</strong> reset one axis or all axes.</p>
+        <p><strong>G-code:</strong> load commands with G0/G1 and X/Y values.</p>
+        <p><strong>Run:</strong> simulates the loaded path on the canvas.</p>
+      </div>
     </div>
   </div>
 
-  <!-- G-code -->
-  <div class="card gcode">
-    <h2>G-Code</h2>
-    <pre id="gcodeBox">
-G01 X10 Y10
-G01 X20 Y20
-G01 X30 Y10
-    </pre>
-  </div>
-
-  <!-- Logs -->
-  <div class="card logs">
-    <h2>Logs</h2>
-    <div id="log"></div>
-  </div>
-
-</main>
-
-<!-- Controles -->
-<section class="controls">
-  <button id="start">Start</button>
-  <button id="stop">Stop</button>
-</section>
-
-<!-- Emergency -->
-<section class="estop">
-  <button id="estop">EMERGENCY STOP</button>
-</section>
-
-<script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
