@@ -3,6 +3,7 @@
 // =====================
 const logBox = document.getElementById("log");
 
+
 const xEl = document.getElementById("x");
 const yEl = document.getElementById("y");
 const zEl = document.getElementById("z");
@@ -17,6 +18,10 @@ const unitDisplay = document.getElementById("unitDisplay");
 
 const statusEl = document.getElementById("machineStatus");
 const gcodeInput = document.getElementById("gcodeInput");
+
+const loadGcodeBtn = document.getElementById("load-gcode-btn");
+const gcodeFileInput = document.getElementById("gcode-file-input");
+
 const helpModal = document.getElementById("helpModal");
 
 const canvas = document.getElementById("machineCanvas");
@@ -24,7 +29,12 @@ const ctx = canvas.getContext("2d");
 
 const xLimitEl = document.getElementById("xLimit");
 const yLimitEl = document.getElementById("yLimit");
-const zLimitEl = document.getElementById("zLimit");
+const zUpLimitEl = document.getElementById("zUpLimit");
+const zDownLimitEl = document.getElementById("zDownLimit");
+
+const SAFE_Z = 5;
+
+
 
 // =====================
 // STATE
@@ -37,11 +47,12 @@ let machine = {
   spindleOn: false,
   rpm: 0,
   feedRate: 100,
-  workspace: {
-    xMax: 300,
-    yMax: 200,
-    zMax: 50
-  }
+workspace: {
+  xMax: 300,
+  yMax: 200,
+  zUpMax: 100,
+  zDownMax: 60
+}
 };
 
 let toolpath = [];
@@ -50,8 +61,10 @@ let simulationIndex = 0;
 let simulationTimer = null;
 let simulationPhase = "idle";
 let returnTarget = null;
-const SAFE_Z = 5;
-
+let isPaused = false;
+let pausedPhase = null;
+let spindleTargetRPM = 12000;
+let spindleRampTimer = null;
 let currentPosition = { x: 0, y: 0 };
 let targetPosition = null;
 let executedSegments = [];
@@ -136,8 +149,8 @@ function jog(axis, direction) {
     return;
   }
 
-  if (nextZ > 0 || nextZ < -machine.workspace.zMax) {
-    addLog(`Z limit reached (0 to -${machine.workspace.zMax})`);
+  if (nextZ > machine.workspace.zUpMax || nextZ < -machine.workspace.zDownMax) {
+    addLog(`Z limit reached (-${machine.workspace.zDownMax} to +${machine.workspace.zUpMax})`);
     return;
   }
 
@@ -179,24 +192,60 @@ function homeAxes() {
 // =====================
 // SPINDLE
 // =====================
-function startSpindle() {
-  if (machine.spindleOn) return;
+function startSpindle(targetRPM = 12000) {
+  if (machine.spindleOn && machine.rpm === targetRPM) return;
 
   machine.spindleOn = true;
-  machine.rpm = 12000;
-  updateRPMDisplay();
-  addLog("Spindle started");
+  animateSpindleTo(targetRPM);
+  addLog(`Spindle starting to ${targetRPM} RPM`);
+}
+
+function animateSpindleTo(targetRPM) {
+  if (spindleRampTimer) {
+    clearInterval(spindleRampTimer);
+    spindleRampTimer = null;
+  }
+
+  spindleTargetRPM = targetRPM;
+
+  spindleRampTimer = setInterval(() => {
+    if (machine.rpm < spindleTargetRPM) {
+      machine.rpm = Math.min(machine.rpm + 500, spindleTargetRPM);
+    } else if (machine.rpm > spindleTargetRPM) {
+      machine.rpm = Math.max(machine.rpm - 500, spindleTargetRPM);
+    }
+
+    updateRPMDisplay();
+
+    if (machine.rpm === spindleTargetRPM) {
+      clearInterval(spindleRampTimer);
+      spindleRampTimer = null;
+    }
+  }, 80);
 }
 
 function stopSpindle() {
-  if (!machine.spindleOn) return;
+  if (!machine.spindleOn && machine.rpm === 0) return;
 
   machine.spindleOn = false;
-  machine.rpm = 0;
-  updateRPMDisplay();
-  addLog("Spindle stopped");
-}
 
+  // stop machine movement when spindle is stopped
+  stopSimulation();
+
+  if (simulationPhase !== "idle") {
+    simulationPhase = "idle";
+    targetPosition = null;
+    returnTarget = null;
+    isPaused = false;
+    pausedPhase = null;
+    addLog("Spindle stopped - machine motion interrupted");
+  } else {
+    addLog("Spindle stopped");
+  }
+
+  animateSpindleTo(0);
+  drawMachinePosition();
+}
 // =====================
 // FEED RATE
 // =====================
@@ -256,31 +305,88 @@ function disconnectMachine() {
 // =====================
 // HELP
 // =====================
-function toggleHelp() {
-  helpModal.classList.toggle("hidden");
-}
+function showHelp() {
+  alert(`CNC DASHBOARD HELP
 
+BASIC WORKFLOW
+1. Click Connect
+2. Load or paste G-code
+3. Click Load to parse the toolpath
+4. Click Run to start the simulation
+5. Use Pause to temporarily stop motion
+6. Use Run again to resume
+7. Use Reset to clear the current simulation
+
+BUTTONS
+Connect
+- Enables machine controls and simulation
+
+Load File
+- Loads a local .gcode, .nc, or .txt file into the G-code editor
+
+Load
+- Parses the G-code from the editor and prepares the toolpath
+
+Run
+- Starts the automatic cycle
+- If paused, resumes the simulation
+
+Pause
+- Temporarily pauses machine motion
+- Keeps the current simulation state
+
+Stop Spindle
+- Stops the spindle
+- Interrupts machine motion for safety
+
+Reset
+- Stops the simulation and resets machine position/state
+
+Clear
+- Clears the G-code editor and loaded toolpath
+
+SUPPORTED G-CODE
+G21 - millimeters
+G90 - absolute positioning
+G0  - rapid move
+G1  - linear cutting move
+M3  - spindle on
+M5  - spindle off
+
+NOTES
+- G0 moves are shown as rapid motion
+- G1 moves represent cutting moves
+- After cycle completion, only cutting paths remain highlighted
+- The simulation returns to safe Z and then back to origin at the end
+- Z can move upward above zero and downward below zero
+- Example workspace: Z from -60 mm to +100 mm
+- Safe Z uses a positive height above the work surface
+`);
+
+
+}
 function applyWorkspaceLimits() {
   const newX = parseFloat(xLimitEl.value);
   const newY = parseFloat(yLimitEl.value);
-  const newZ = parseFloat(zLimitEl.value);
+  const newZUp = parseFloat(zUpLimitEl.value);
+  const newZDown = parseFloat(zDownLimitEl.value);
 
-  if (newX <= 0 || newY <= 0 || newZ <= 0) {
+  if (newX <= 0 || newY <= 0 || newZUp <= 0 || newZDown <= 0) {
     addLog("Workspace limits must be greater than zero");
     return;
   }
 
   machine.workspace.xMax = newX;
   machine.workspace.yMax = newY;
-  machine.workspace.zMax = newZ;
+  machine.workspace.zUpMax = newZUp;
+  machine.workspace.zDownMax = newZDown;
 
   addLog(
-    `Workspace updated: X ${newX}, Y ${newY}, Z -${newZ} to 0 ${machine.unit}`
+    `Workspace updated: X ${newX}, Y ${newY}, Z ${-newZDown} to +${newZUp} ${machine.unit}`
   );
 
   drawMachinePosition();
 }
-
 // =====================
 // GCODE
 // =====================
@@ -382,12 +488,45 @@ function parseGcode(text) {
   return points;
 }
 
+loadGcodeBtn.addEventListener("click", () => {
+  gcodeFileInput.click();
+});
+
+gcodeFileInput.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const content = e.target.result;
+    gcodeInput.value = content;
+    addLog(`G-code file loaded: ${file.name}`);
+  };
+
+  reader.onerror = function () {
+    addLog("Error loading G-code file.");
+  };
+
+  reader.readAsText(file);
+});
+
 // =====================
 // SIMULATION
 // =====================
 function runSimulation() {
   if (!isConnected) {
     addLog("Connect first");
+    return;
+  }
+
+  if (isPaused) {
+    isPaused = false;
+    simulationPhase = pausedPhase || "cutting";
+    pausedPhase = null;
+
+    addLog("Simulation resumed");
+    startSimulationLoop();
     return;
   }
 
@@ -401,23 +540,27 @@ function runSimulation() {
     return;
   }
 
-  startSpindle();
+  startSpindle(12000);
 
   simulationIndex = 0;
   executedSegments = [];
   simulationPhase = "safeZUp";
   returnTarget = null;
+  targetPosition = toolpath[1];
+  isPaused = false;
+  pausedPhase = null;
 
   currentPosition.x = toolpath[0].x;
   currentPosition.y = toolpath[0].y;
 
   machine.x = currentPosition.x;
   machine.y = currentPosition.y;
-  targetPosition = toolpath[1];
-  simulationIndex = 1;
 
   addLog("Auto cycle started");
+  startSimulationLoop();
+}
 
+function startSimulationLoop() {
   simulationTimer = setInterval(() => {
     // phase 1: raise to safe Z before motion
     if (simulationPhase === "safeZUp") {
@@ -542,6 +685,11 @@ function runSimulation() {
         simulationPhase = "idle";
         stopSimulation();
         stopSpindle();
+
+        // remove executed G0 moves after cycle is complete
+        executedSegments = executedSegments.filter(segment => segment.type === "G1");
+
+        drawMachinePosition();
         addLog("Cycle complete");
         return;
       }
@@ -557,6 +705,19 @@ function runSimulation() {
   }, 30);
 }
 
+function pauseSimulation() {
+  if (!simulationTimer) {
+    addLog("No active simulation to pause");
+    return;
+  }
+
+  pausedPhase = simulationPhase;
+  isPaused = true;
+
+  stopSimulation();
+  addLog("Simulation paused");
+}
+
 function stopSimulation() {
   if (simulationTimer) {
     clearInterval(simulationTimer);
@@ -568,6 +729,10 @@ function resetSimulation() {
   stopSimulation();
   executedSegments = [];
   targetPosition = null;
+  returnTarget = null;
+  simulationPhase = "idle";
+  isPaused = false;
+  pausedPhase = null;
 
   if (toolpath.length === 0) {
     machine.x = 0;
@@ -578,9 +743,11 @@ function resetSimulation() {
     machine.y = toolpath[0].y;
   }
 
+  machine.z = 0;
   currentPosition.x = machine.x;
   currentPosition.y = machine.y;
 
+  stopSpindle();
   updateCoordinates();
   addLog("Simulation reset");
 }
@@ -612,18 +779,69 @@ function drawMachinePosition() {
   const originX = padding;
   const originY = h - padding;
 
-  function toCanvasX(x) {
-    return originX + x * scale;
-  }
+function toCanvasX(x, z = 0) {
+  return originX + x * scale + z * 2.2;
+}
 
-  function toCanvasY(y) {
-    return originY - y * scale;
-  }
+function toCanvasY(y, z = 0) {
+  return originY - y * scale - z * 1.2;
+}
 
-  // workspace border
+function projectPoint(x, y, z = 0) {
+  return {
+    x: toCanvasX(x, z),
+    y: toCanvasY(y, z)
+  };
+}
+
+  // workspace pseudo-3D block
+  const topLeft = projectPoint(0, machine.workspace.yMax, 0);
+  const topRight = projectPoint(machine.workspace.xMax, machine.workspace.yMax, 0);
+  const bottomLeft = projectPoint(0, 0, 0);
+  const bottomRight = projectPoint(machine.workspace.xMax, 0, 0);
+
+  const depthOffsetX = 18;
+  const depthOffsetY = 12;
+
+  const topLeftBack = { x: topLeft.x + depthOffsetX, y: topLeft.y + depthOffsetY };
+  const topRightBack = { x: topRight.x + depthOffsetX, y: topRight.y + depthOffsetY };
+  const bottomLeftBack = { x: bottomLeft.x + depthOffsetX, y: bottomLeft.y + depthOffsetY };
+  const bottomRightBack = { x: bottomRight.x + depthOffsetX, y: bottomRight.y + depthOffsetY };
+
+  // back face
+  ctx.fillStyle = "rgba(70, 90, 110, 0.15)";
+  ctx.beginPath();
+  ctx.moveTo(topLeftBack.x, topLeftBack.y);
+  ctx.lineTo(topRightBack.x, topRightBack.y);
+  ctx.lineTo(bottomRightBack.x, bottomRightBack.y);
+  ctx.lineTo(bottomLeftBack.x, bottomLeftBack.y);
+  ctx.closePath();
+  ctx.fill();
+
+  // side connections
+  ctx.strokeStyle = "#243544";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(topLeft.x, topLeft.y);
+  ctx.lineTo(topLeftBack.x, topLeftBack.y);
+  ctx.moveTo(topRight.x, topRight.y);
+  ctx.lineTo(topRightBack.x, topRightBack.y);
+  ctx.moveTo(bottomLeft.x, bottomLeft.y);
+  ctx.lineTo(bottomLeftBack.x, bottomLeftBack.y);
+  ctx.moveTo(bottomRight.x, bottomRight.y);
+  ctx.lineTo(bottomRightBack.x, bottomRightBack.y);
+  ctx.stroke();
+
+  // front face
   ctx.strokeStyle = "#35566a";
   ctx.lineWidth = 2;
-  ctx.strokeRect(originX, originY - drawHeight, drawWidth, drawHeight);
+  ctx.beginPath();
+  ctx.moveTo(topLeft.x, topLeft.y);
+  ctx.lineTo(topRight.x, topRight.y);
+  ctx.lineTo(bottomRight.x, bottomRight.y);
+  ctx.lineTo(bottomLeft.x, bottomLeft.y);
+  ctx.closePath();
+  ctx.stroke();
 
   // grid
   ctx.strokeStyle = "#1c2733";
@@ -631,31 +849,41 @@ function drawMachinePosition() {
 
   const gridStep = 25;
   for (let x = 0; x <= machine.workspace.xMax; x += gridStep) {
-    const cx = toCanvasX(x);
+    const p1 = projectPoint(x, 0, 0);
+    const p2 = projectPoint(x, machine.workspace.yMax, 0);
+
     ctx.beginPath();
-    ctx.moveTo(cx, originY);
-    ctx.lineTo(cx, originY - drawHeight);
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
     ctx.stroke();
   }
 
   for (let y = 0; y <= machine.workspace.yMax; y += gridStep) {
-    const cy = toCanvasY(y);
+    const p1 = projectPoint(0, y, 0);
+    const p2 = projectPoint(machine.workspace.xMax, y, 0);
+
     ctx.beginPath();
-    ctx.moveTo(originX, cy);
-    ctx.lineTo(originX + drawWidth, cy);
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
     ctx.stroke();
   }
 
   // full path
   if (toolpath.length > 1) {
     for (let i = 1; i < toolpath.length; i++) {
+
       const prev = toolpath[i - 1];
       const curr = toolpath[i];
 
-      const x1 = toCanvasX(prev.x);
-      const y1 = toCanvasY(prev.y);
-      const x2 = toCanvasX(curr.x);
-      const y2 = toCanvasY(curr.y);
+ const zPreview = curr.type === "G1" ? -12 : SAFE_Z;
+
+const p1 = projectPoint(prev.x, prev.y, zPreview);
+const p2 = projectPoint(curr.x, curr.y, zPreview);
+
+      const x1 = p1.x;
+      const y1 = p1.y;
+      const x2 = p2.x;
+      const y2 = p2.y;
 
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -679,10 +907,16 @@ function drawMachinePosition() {
   // executed path
   if (executedSegments.length > 0) {
     executedSegments.forEach((segment) => {
-      const x1 = toCanvasX(segment.x1);
-      const y1 = toCanvasY(segment.y1);
-      const x2 = toCanvasX(segment.x2);
-      const y2 = toCanvasY(segment.y2);
+
+     const zExecuted = segment.type === "G1" ? -12 : SAFE_Z;
+
+const p1 = projectPoint(segment.x1, segment.y1, zExecuted);
+const p2 = projectPoint(segment.x2, segment.y2, zExecuted);
+
+      const x1 = p1.x;
+      const y1 = p1.y;
+      const x2 = p2.x;
+      const y2 = p2.y;
 
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -706,8 +940,10 @@ function drawMachinePosition() {
   // points
   if (toolpath.length > 0) {
     toolpath.forEach((point) => {
-      const px = toCanvasX(point.x);
-      const py = toCanvasY(point.y);
+
+       const p = projectPoint(point.x, point.y, 0);
+      const px = p.x;
+      const py = p.y;
 
       ctx.fillStyle = "#f59e0b";
       ctx.beginPath();
@@ -716,19 +952,36 @@ function drawMachinePosition() {
     });
   }
 
-  // tool
-  const toolX = toCanvasX(machine.x);
-  const toolY = toCanvasY(machine.y);
+   // tool pseudo-3D
+
+ const visualToolZ = targetPosition && targetPosition.type === "G1" ? -6 : SAFE_Z;
+
+const toolTop = projectPoint(machine.x, machine.y, SAFE_Z);
+const toolTip = projectPoint(machine.x, machine.y, visualToolZ);
+
+  ctx.strokeStyle = "#8bdfff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(toolTop.x, toolTop.y);
+  ctx.lineTo(toolTip.x, toolTip.y);
+  ctx.stroke();
 
   ctx.fillStyle = "#00c2ff";
   ctx.beginPath();
-  ctx.arc(toolX, toolY, 6, 0, Math.PI * 2);
+  ctx.arc(toolTip.x, toolTip.y, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(0, 194, 255, 0.35)";
+  ctx.beginPath();
+  ctx.arc(toolTop.x, toolTop.y, 4, 0, Math.PI * 2);
   ctx.fill();
 
   // origin marker
+  const originPoint = projectPoint(0, 0, 0);
+
   ctx.fillStyle = "#f59e0b";
   ctx.beginPath();
-  ctx.arc(originX, originY, 5, 0, Math.PI * 2);
+  ctx.arc(originPoint.x, originPoint.y, 5, 0, Math.PI * 2);
   ctx.fill();
 
   // labels
@@ -738,22 +991,91 @@ function drawMachinePosition() {
   ctx.fillText(`Y: ${machine.y.toFixed(2)} ${machine.unit}`, 15, 40);
   ctx.fillText(`Z: ${machine.z.toFixed(2)} ${machine.unit}`, 15, 60);
 
-  ctx.fillStyle = "#9aa4b2";
-  ctx.fillText("Origin", originX + 8, originY - 8);
-  ctx.fillText(`X max: ${machine.workspace.xMax}`, originX + drawWidth - 80, originY + 18);
-  ctx.fillText(`Y max: ${machine.workspace.yMax}`, originX - 5, originY - drawHeight - 10);
+   ctx.fillStyle = "#9aa4b2";
+  ctx.fillText("Origin", originPoint.x + 8, originPoint.y - 8);
+  ctx.fillText(`X max: ${machine.workspace.xMax}`, topRight.x - 90, bottomRight.y + 20);
+  ctx.fillText(`Y max: ${machine.workspace.yMax}`, topLeft.x - 4, topLeft.y - 10);
 }
 
 // =====================
 // INIT
 // =====================
-gcodeInput.value = `G0 X0 Y0
-G0 X20 Y20
-G1 X120 Y20
-G1 X120 Y80
-G0 X60 Y120
-G1 X20 Y40`;
-updateStatus(false);
+
+gcodeInput.value = 
+`G21
+G90
+G17
+G0 Z5
+
+; =====================
+; JVR (top)
+; =====================
+
+; J
+G0 X85 Y175
+G1 X115 Y175
+G1 X115 Y135
+G1 X108 Y128
+G1 X92 Y128
+G1 X85 Y135
+
+G0 Z5
+
+; V
+G0 X130 Y175
+G1 X145 Y128
+G1 X160 Y175
+
+G0 Z5
+
+; R
+G0 X175 Y128
+G1 X175 Y175
+G1 X200 Y175
+G1 X208 Y167
+G1 X208 Y155
+G1 X200 Y147
+G1 X175 Y147
+G0 X193 Y147
+G1 X212 Y128
+
+G0 Z5
+
+; =====================
+; CNC (bottom)
+; =====================
+
+; C
+G0 X90 Y95
+G1 X100 Y95
+G1 X90 Y95
+G1 X80 Y85
+G1 X80 Y55
+G1 X90 Y45
+G1 X100 Y45
+
+G0 Z5
+
+; N
+G0 X120 Y45
+G1 X120 Y95
+G1 X150 Y45
+G1 X150 Y95
+
+G0 Z5
+
+; C
+G0 X185 Y95
+G1 X195 Y95
+G1 X185 Y95
+G1 X175 Y85
+G1 X175 Y55
+G1 X185 Y45
+G1 X195 Y45
+
+G0 Z10
+G0 X0 Y0
+M5`;updateStatus(false);
 updateAllUI();
 drawMachinePosition();
 

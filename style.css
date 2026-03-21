@@ -178,8 +178,8 @@ body {
 .controls-row,
 .limits-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
 .controls-row {
@@ -346,6 +346,27 @@ input[type="number"] {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.gcode-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.control-btn {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #2b2f3a;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  transition: 0.2s ease;
+}
+
+.control-btn:hover {
+  background: #3a4050;
 }
 
 .gcode-input {
